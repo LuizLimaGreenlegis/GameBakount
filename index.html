@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jogo Breakout</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            background-color: #f0f0f0; /* Cor de fundo do corpo */
+        }
+
+        .container {
+            display: grid;
+            place-items: center;
+            height: 100vh;
+        }
+
+        canvas {
+            border: 2px solid #000;
+            width: 90%; /* Largura do canvas ajustada para 90% da largura da tela */
+            height: 80vh; /* Altura do canvas ajustada para 80% da altura da tela */
+        }
+
+        .modal-content {
+            background-color: #f8f9fa; /* Cor de fundo do modal */
+            border: 2px solid #343a40; /* Cor da borda do modal */
+        }
+
+        .modal-title {
+            color: #007bff; /* Cor do título do modal */
+        }
+
+        .modal-body, .modal-footer {
+            color: #6c757d; /* Cor do texto do modal */
+        }
+
+        .modal-footer .btn-primary {
+            background-color: #28a745; /* Cor do botão "Tentar Novamente" */
+            border-color: #28a745; /* Cor da borda do botão "Tentar Novamente" */
+        }
+
+        .modal-footer .btn-primary:hover {
+            background-color: #218838; /* Cor de hover do botão "Tentar Novamente" */
+            border-color: #1e7e34; /* Cor da borda de hover do botão "Tentar Novamente" */
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <canvas id="breakoutCanvas"></canvas>
+        <div id="gameOverModal" class="modal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Você Perdeu Naju!</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <p>Sua pontuação foi: <span id="finalScore"></span></p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" id="tryAgainBtn" class="btn btn-primary">Tentar Novamente</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-analytics.js";
+        // TODO: Add SDKs for Firebase products that you want to use
+        // https://firebase.google.com/docs/web/setup#available-libraries
+
+        // Your web app's Firebase configuration
+        // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+        const firebaseConfig = {
+            apiKey: "AIzaSyDdzLCo03ObBQmTxBlGHQTFUuQJaeLz9TE",
+            authDomain: "jogo-naju.firebaseapp.com",
+            projectId: "jogo-naju",
+            storageBucket: "jogo-naju.appspot.com",
+            messagingSenderId: "416352439093",
+            appId: "1:416352439093:web:95a396c3c9d9d21f0e1a7c",
+            measurementId: "G-R1K13WGNMD"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const analytics = getAnalytics(app);
+        
+        document.addEventListener("DOMContentLoaded", function() {
+            var canvas = document.getElementById("breakoutCanvas");
+            var ctx = canvas.getContext("2d");
+
+            var larguraCanvas = canvas.width = window.innerWidth * 0.9;
+            var alturaCanvas = canvas.height = window.innerHeight * 0.8;
+
+            var raioBola = 10;
+            var x = larguraCanvas / 2;
+            var y = alturaCanvas - 30;
+            var dx = 3;
+            var dy = -3;
+
+            var alturaRaquete = 10;
+            var larguraRaquete = 100;
+            var posicaoRaqueteX = (larguraCanvas - larguraRaquete) / 2;
+            var direitaPressionada = false;
+            var esquerdaPressionada = false;
+            var movimentoRaquete = 0; // Variável para controlar o movimento contínuo da raquete
+
+            var numLinhasTijolos = 5;
+            var numColunasTijolos = 10;
+
+            var larguraTijolo = 80;
+            var alturaTijolo = 20;
+            var espacoEntreTijolos = 10;
+            var margemSuperiorTijolos = 30;
+            var margemEsquerdaTijolos = (larguraCanvas - (numColunasTijolos * (larguraTijolo + espacoEntreTijolos))) / 2;
+
+            var tijolos = [];
+
+            for (var c = 0; c < numColunasTijolos; c++) {
+                tijolos[c] = [];
+                for (var r = 0; r < numLinhasTijolos; r++) {
+                    tijolos[c][r] = { x: 0, y: 0, status: 1 };
+                }
+            }
+
+            var pontuacao = 0;
+            var jogoRodando = true;
+            var velocidadeNormal = 3; // Velocidade normal da bola
+            var faseAtual = 1;
+
+            document.addEventListener("keydown", teclaPressionada, false);
+            document.addEventListener("keyup", teclaLiberada, false);
+
+            function teclaPressionada(e) {
+                if (e.key == "Right" || e.key == "ArrowRight") {
+                    direitaPressionada = true;
+                } else if (e.key == "Left" || e.key == "ArrowLeft") {
+                    esquerdaPressionada = true;
+                }
+            }
+
+            function teclaLiberada(e) {
+                if (e.key == "Right" || e.key == "ArrowRight") {
+                    direitaPressionada = false;
+                } else if (e.key == "Left" || e.key == "ArrowLeft") {
+                    esquerdaPressionada = false;
+                }
+            }
+
+            canvas.addEventListener("touchstart", toqueInicio, false);
+            canvas.addEventListener("touchmove", toqueMovimento, false);
+            canvas.addEventListener("touchend", toqueFim, false)
+            function toqueInicio(e) {
+                var touch = e.touches[0];
+                var touchX = touch.clientX;
+                if (touchX > posicaoRaqueteX && touchX < posicaoRaqueteX + larguraRaquete) {
+                    movimentoRaquete = 0; // Resetar o movimento ao tocar na raquete
+                } else if (touchX < posicaoRaqueteX) {
+                    movimentoRaquete = -7; // Mover para a esquerda
+                } else {
+                    movimentoRaquete = 7; // Mover para a direita
+                }
+            }
+    
+            function toqueMovimento(e) {
+                e.preventDefault(); // Impedir comportamento padrão do touchmove
+                var touch = e.touches[0];
+                var touchX = touch.clientX;
+                if (touchX > 0 && touchX < larguraCanvas) {
+                    posicaoRaqueteX = touchX - larguraRaquete / 2; // Ajuste para a posição
+                }
+            }
+    
+            function toqueFim(e) {
+                movimentoRaquete = 0; // Parar o movimento quando o toque termina
+            }
+    
+            function deteccaoColisao() {
+                for (var c = 0; c < numColunasTijolos; c++) {
+                    for (var r = 0; r < numLinhasTijolos; r++) {
+                        var t = tijolos[c][r];
+                        if (t.status == 1) {
+                            if (x > t.x && x < t.x + larguraTijolo && y > t.y && y < t.y + alturaTijolo) {
+                                dy = -dy;
+                                t.status = 0;
+                                pontuacao++;
+                                if (pontuacao == numLinhasTijolos * numColunasTijolos) {
+                                    paraProximaFase();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+    
+            function desenharBola() {
+                if (jogoRodando) {
+                    ctx.beginPath();
+                    ctx.arc(x, y, raioBola, 0, Math.PI * 2);
+                    ctx.fillStyle = "#FF6347"; // Cor da bola (Tomato)
+                    ctx.fill();
+                    ctx.closePath();
+                }
+            }
+    
+            function desenharRaquete() {
+                ctx.beginPath();
+                ctx.rect(posicaoRaqueteX, alturaCanvas - alturaRaquete, larguraRaquete, alturaRaquete);
+                ctx.fillStyle = "#4682B4"; // Cor da raquete (SteelBlue)
+                ctx.fill();
+                ctx.closePath();
+            }
+    
+            function desenharTijolos() {
+                for (var c = 0; c < numColunasTijolos; c++) {
+                    for (var r = 0; r < numLinhasTijolos; r++) {
+                        if (tijolos[c][r].status == 1) {
+                            var tijoloX = c * (larguraTijolo + espacoEntreTijolos) + margemEsquerdaTijolos;
+                            var tijoloY = r * (alturaTijolo + espacoEntreTijolos) + margemSuperiorTijolos;
+                            tijolos[c][r].x = tijoloX;
+                            tijolos[c][r].y = tijoloY;
+                            ctx.beginPath();
+                            ctx.rect(tijoloX, tijoloY, larguraTijolo, alturaTijolo);
+                            ctx.fillStyle = "#32CD32"; // Cor dos tijolos (LimeGreen)
+                            ctx.fill();
+                            ctx.closePath();
+                        }
+                    }
+                }
+            }
+    
+            function desenharPontuacao() {
+                ctx.font = "24px Arial";
+                ctx.fillStyle = "#FFD700"; // Cor do texto da pontuação (Gold)
+                ctx.fillText("Pontuação: " + pontuacao, 20, 30);
+            }
+    
+            function desenhar() {
+                ctx.clearRect(0, 0, larguraCanvas, alturaCanvas);
+                desenharTijolos();
+                desenharBola();
+                desenharRaquete();
+                desenharPontuacao();
+    
+                deteccaoColisao();
+    
+                x += dx;
+                y += dy;
+    
+                if (x + dx > larguraCanvas - raioBola || x + dx < raioBola) {
+                    dx = -dx;
+                }
+    
+                if (y + dy < raioBola) {
+                    dy = -dy;
+                } else if (y + dy > alturaCanvas - raioBola) {
+                    if (x > posicaoRaqueteX && x < posicaoRaqueteX + larguraRaquete) {
+                        dy = -dy;
+                    } else {
+                        if (jogoRodando) {
+                            fimJogo();
+                        }
+                    }
+                }
+    
+                // Movimento contínuo da raquete
+                if (direitaPressionada && posicaoRaqueteX < larguraCanvas - larguraRaquete) {
+                    posicaoRaqueteX += 7;
+                } else if (esquerdaPressionada && posicaoRaqueteX > 0) {
+                    posicaoRaqueteX -= 7;
+                }
+    
+                // Ajuste do movimento contínuo da raquete para o toque na tela
+                posicaoRaqueteX += movimentoRaquete;
+    
+                // Limitando a posição da raquete dentro dos limites do canvas
+                if (posicaoRaqueteX < 0) {
+                    posicaoRaqueteX = 0;
+                } else if (posicaoRaqueteX > larguraCanvas - larguraRaquete) {
+                    posicaoRaqueteX = larguraCanvas - larguraRaquete;
+                }
+    
+                requestAnimationFrame(desenhar);
+            }
+    
+            function fimJogo() {
+                jogoRodando = false;
+                document.getElementById("gameOverModal").style.display = "block";
+                document.getElementById("finalScore").innerHTML = pontuacao;
+            }
+    
+            function reiniciarOuProximaFase() {
+                var modal = document.getElementById("gameOverModal");
+                modal.style.display = "none";
+                jogoRodando = true;
+                pontuacao = 0;
+                x = larguraCanvas / 2;
+                y = alturaCanvas - 30;
+                dx = velocidadeNormal; // Restaurando a velocidade normal
+                dy = -velocidadeNormal; // Restaurando a velocidade normal
+                tijolos = [];
+                for (var c = 0; c < numColunasTijolos; c++) {
+                    tijolos[c] = [];
+                    for (var r = 0; r < numLinhasTijolos; r++) {
+                        tijolos[c][r] = { x: 0, y: 0, status: 1 };
+                    }
+                }
+                desenhar();
+            }
+    
+            function paraProximaFase() {
+                faseAtual++;
+                var modal = document.getElementById("gameOverModal");
+                modal.style.display = "block";
+                document.querySelector(".modal-title").innerHTML = "Você conseguiu Naju!";
+                document.getElementById("tryAgainBtn").innerHTML = "Próxima Fase";
+                dx = velocidadeNormal * faseAtual; // Aumentando a velocidade para a próxima fase
+                dy = -velocidadeNormal * faseAtual; // Aumentando a velocidade para a próxima fase
+                jogoRodando = false;
+                }        document.getElementById("tryAgainBtn").addEventListener("click", reiniciarOuProximaFase);
+
+                // Integrando o Hammer.js para lidar com toques na tela
+                var hammertime = new Hammer(canvas);
+                hammertime.get('pan').set({ direction: Hammer.DIRECTION_ALL }); // Configurando para detectar toques em todas as direções
+        
+                hammertime.on('panmove', function (ev) {
+                    var touchX = ev.center.x;
+                    if (touchX > posicaoRaqueteX && touchX < posicaoRaqueteX + larguraRaquete) {
+                        movimentoRaquete = 0; // Resetar o movimento ao tocar na raquete
+                    } else if (touchX < posicaoRaqueteX) {
+                        movimentoRaquete = -7; // Mover para a esquerda
+                    } else {
+                        movimentoRaquete = 7; // Mover para a direita
+                    }
+                });
+        
+                hammertime.on('panend', function (ev) {
+                    movimentoRaquete = 0; // Parar o movimento quando o toque termina
+                });
+        
+                desenhar();
+            });
+        </script>
+    </body>
+    </html>

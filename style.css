@@ -1,0 +1,44 @@
+body, html {
+    margin: 0;
+    padding: 0;
+    background-color: #f0f0f0; /* Cor de fundo do corpo */
+    height: 100%;
+    font-size: 16px; /* Definindo um tamanho de fonte base */
+}
+
+.container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh; /* Usando viewport height para garantir que a tela seja coberta */
+}
+
+canvas {
+    border: 2px solid #000;
+    width: 90%; /* Definindo a largura do canvas como 90% do contêiner */
+    max-width: 800px; /* Definindo uma largura máxima para o canvas */
+    height: auto; /* Permitindo que a altura seja ajustada automaticamente */
+}
+
+.modal-content {
+    background-color: #f8f9fa; /* Cor de fundo do modal */
+    border: 2px solid #343a40; /* Cor da borda do modal */
+}
+
+.modal-title {
+    color: #007bff; /* Cor do título do modal */
+}
+
+.modal-body, .modal-footer {
+    color: #6c757d; /* Cor do texto do modal */
+}
+
+.modal-footer .btn-primary {
+    background-color: #28a745; /* Cor do botão "Tentar Novamente" */
+    border-color: #28a745; /* Cor da borda do botão "Tentar Novamente" */
+}
+
+.modal-footer .btn-primary:hover {
+    background-color: #218838; /* Cor de hover do botão "Tentar Novamente" */
+    border-color: #1e7e34; /* Cor da borda de hover do botão "Tentar Novamente" */
+}
